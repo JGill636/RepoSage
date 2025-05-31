@@ -4,11 +4,25 @@ const app = express();
 
 // cross origin resource sharing
 const cors = require("cors");
+const axios = require('axios');
 
 // list of domains that are ok to share requests from (blocked by default by browser)
 const corsOptions = {
     origin: ["http://localhost:5173"],
 };
+
+function parseGitHubUrl(url) {
+    const parts = url.replace('https://github.com/', '').split('/');
+    return {
+        owner: parts[0],
+        repo: parts[1]
+    };
+} 
+
+async function fetchRepoData(owner, repo) {
+  const response = await axios.get(`https://api.github.com/repos/${owner}/${repo}`);
+  return response.data;
+}
 
 // applies it to all routes
 app.use(cors(corsOptions));
@@ -19,14 +33,23 @@ app.get("/api", (req, res) => {
     res.json({"fruits": ["apple", "bruh", "banana", "kiwi"]});
 });
 
-app.post("/api/process-repo", (req, res) => {
+app.post("/api/process-repo", async (req, res) => {
     const { repoUrl } = req.body; // short for const repoUrl = req.body.repoUrl;
-    console.log("Recieved repo URL:", repoUrl);
 
-    // call github api
-
+    // parse owner and repo name
+    const { owner, repo } = parseGitHubUrl(repoUrl);
+    console.log("Extracted information from url: ", {owner, repo});
     
-    res.json({ message: "Repo URL recieved!", repoUrl});
+    // call github api
+    try {
+        const repoData = await fetchRepoData(owner, repo);
+        res.json({repoData})
+    } catch (error) {
+        console.error("Failed to fetch repo data", error);
+        res.status(500).json({ error: "Failed to fetch repo data" });
+    }
+
+    //res.json({ message: "Repo URL recieved!", repoUrl});
 });
 
 // listen for requests on port 8080
