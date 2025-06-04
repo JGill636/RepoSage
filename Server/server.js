@@ -24,6 +24,20 @@ async function fetchRepoData(owner, repo) {
   return response.data;
 }
 
+
+// Fetches the file tree (contents) from a GitHub repo
+async function fetchRepoFileTree(owner, repo) { 
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/`; // root directory
+  const response = await axios.get(url);
+  return response.data; // This will be an array of files/folders
+}
+
+// Downloads the raw content of a file
+async function downloadFileContent(downloadURL) {
+    const response = await axios.get(downloadURL);
+    return response.data;
+}
+
 // applies it to all routes
 app.use(cors(corsOptions));
 app.use(express.json()); // Needed to parse JSON request bodies
@@ -40,10 +54,31 @@ app.post("/api/process-repo", async (req, res) => {
     const { owner, repo } = parseGitHubUrl(repoUrl);
     console.log("Extracted information from url: ", {owner, repo});
     
-    // call github api
+    
+    // call github api and file structure
     try {
         const repoData = await fetchRepoData(owner, repo);
-        res.json({repoData})
+
+        const fileTree = await fetchRepoFileTree(owner, repo);
+
+        // Filter to only 'file' type entries
+        const files = fileTree.filter(item => item.type === 'file' && item.download_url);
+
+        // For now, only grab first 5 files
+        const filesToDownload = files.slice(0, 5);
+
+        const downloadedFiles = [];
+
+        for (const file of filesToDownload) {
+        const content = await downloadFileContent(file.download_url);
+        downloadedFiles.push({
+            path: file.path,
+            name: file.name,
+            content
+        });
+        }
+
+        res.json({repoData, downloadedFiles});
     } catch (error) {
         console.error("Failed to fetch repo data", error);
         res.status(500).json({ error: "Failed to fetch repo data" });
